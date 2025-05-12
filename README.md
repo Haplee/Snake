@@ -48,12 +48,6 @@ Un juego clásico de la serpiente, ahora más fluido, visualmente atractivo y ad
 
 ---
 
-## 📸 Vista previa
-
-![Vista previa del juego](preview.png)
-
----
-
 ## 🧩 Personaliza el juego
 
 Puedes cambiar:
