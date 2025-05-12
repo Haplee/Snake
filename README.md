@@ -60,7 +60,7 @@ Puedes cambiar:
 
 ## 📝 Licencia
 
-MIT © 2025 — Hecho con ❤️ por [TuNombre]
+MIT © 2025 — Hecho con ❤️ por [FranVi]
 
 ---
 
