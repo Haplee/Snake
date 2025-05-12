@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake Mejorado</title>
+  <!-- Font Awesome gratis -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#000; color:#fff; font-family:'Segoe UI', sans-serif; }
+    main { display: flex; flex-direction: column; height: 100vh; align-items: center; justify-content: flex-start; }
+    #icono {
+      font-size: 60px;
+      margin: 20px 0 10px 0;
+      color: #0f0;
+      text-shadow: 0 0 10px #0f0;
+    }
+    #info { display: flex; justify-content: space-between; width: 80%; margin: 10px; }
+    #score, #highscore { font-size: 18px; }
+    #controls { margin: 10px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    button, select {
+      padding: 12px 24px;
+      background: linear-gradient(to bottom, #333, #111);
+      border: 2px solid #555;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 16px;
+      box-shadow: 0 4px #000;
+      transition: background 0.3s, transform 0.1s;
+    }
+    button:hover, select:hover { background: linear-gradient(to bottom, #555, #222); }
+    button:active, select:active { transform: translateY(2px); box-shadow: 0 2px #000; }
+    #overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 28px;
+      color: rgba(255,255,255,0.8);
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 2;
+      text-shadow: 2px 2px 8px #000;
+    }
+    canvas {
+      background: #111;
+      touch-action: none;
+      border-radius: 12px;
+      box-shadow: 0 0 10px #0f0;
+    }
+    body.light { background: #f0f0f0; color: #000; }
+    body.light canvas { background: #fff; box-shadow: 0 0 10px #333; }
+    body.light button, body.light select {
+      background: linear-gradient(to bottom, #eee, #ccc);
+      color: #000;
+      border: 2px solid #aaa;
+    }
+    body.light button:hover, body.light select:hover { background: linear-gradient(to bottom, #ddd, #bbb); }
+  </style>
+</head>
+<body>
+
+<main>
+    <!-- Icono -->
+    <div id="icono">
+      <i class="fa-solid fa-dragon"></i>
+    </div>
+
+    <div id="info">
+      <div id="score">Puntuación: 0</div>
+      <div id="highscore">Récord: 0</div>
+    </div>
+
+    <canvas id="game"></canvas>
+
+    <div id="controls">
+      <button id="btnStart">Iniciar</button>
+      <button id="btnPause">Pausa</button>
+      <button id="btnReset">Reiniciar</button>
+      <select id="difficulty">
+        <option value="80">Fácil</option>
+        <option value="120" selected>Medio</option>
+        <option value="160">Difícil</option>
+      </select>
+      <select id="theme">
+        <option value="dark" selected>Oscuro</option>
+        <option value="light">Claro</option>
+      </select>
+    </div>
+
+    <div id="overlay">Presiona Iniciar</div>
+    </main>
+        <script>
+        (() => {
+            const canvas = document.getElementById('game');
+            const ctx = canvas.getContext('2d');
+            const scoreEl = document.getElementById('score');
+            const highEl = document.getElementById('highscore');
+            const overlay = document.getElementById('overlay');
+            const btnStart = document.getElementById('btnStart');
+            const btnPause = document.getElementById('btnPause');
+            const btnReset = document.getElementById('btnReset');
+            const difficultySel = document.getElementById('difficulty');
+            const themeSel = document.getElementById('theme');
+
+            let w = 0, h = 0;
+            let headPos = {x:0, y:0}, direction = {x:1, y:0}, nextDir = null;
+            let speed = 120, baseSpeed = 120, trail = [], maxTrail = 10;
+            let apple = {x:0,y:0}, score = 0, highscore = 0;
+            let lastTime = 0, running = false, paused = false;
+            let touchStart = null;
+
+            function resize() {
+            w = canvas.width = Math.floor(window.innerWidth * 0.9);
+            h = canvas.height = Math.floor(window.innerHeight * 0.6);
+            }
+            window.addEventListener('resize', () => { resize(); draw(); });
+            resize();
+
+            function spawnApple() {
+            const margin = 30;
+            apple.x = Math.random() * (w - 2 * margin) + margin;
+            apple.y = Math.random() * (h - 2 * margin) + margin;
+            }
+
+            function startGame() {
+            baseSpeed = parseInt(difficultySel.value);
+            document.body.className = themeSel.value === 'light' ? 'light' : '';
+            headPos = { x: w/2, y: h/2 };
+            direction = { x: 1, y: 0 };
+            nextDir = null;
+            speed = baseSpeed;
+            maxTrail = 10;
+            trail = Array(maxTrail).fill({ ...headPos });
+            spawnApple();
+            score = 0;
+            highscore = parseInt(localStorage.getItem('snakeHigh') || '0');
+            highEl.textContent = 'Récord: ' + highscore;
+            scoreEl.textContent = 'Puntuación: ' + score;
+            overlay.style.display = 'none';
+            running = true; paused = false;
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+            }
+
+            function pauseGame() {
+            if (!running) return;
+            paused = !paused;
+            overlay.textContent = paused ? 'Pausado' : '';
+            overlay.style.display = paused ? 'block' : 'none';
+            if (!paused) requestAnimationFrame(loop);
+            }
+
+            function resetGame() {
+            running = false; paused = false;
+            overlay.textContent = 'Presiona Iniciar';
+            overlay.style.display = 'block';
+            ctx.clearRect(0,0,w,h);
+            scoreEl.textContent = 'Puntuación: 0';
+            }
+
+            btnStart.addEventListener('click', startGame);
+            btnPause.addEventListener('click', pauseGame);
+            btnReset.addEventListener('click', resetGame);
+
+            document.addEventListener('keydown', e => {
+            if (!running || paused) return;
+            const map = {
+                ArrowUp: {x: 0, y: -1},
+                ArrowDown: {x: 0, y: 1},
+                ArrowLeft: {x: -1, y: 0},
+                ArrowRight: {x: 1, y: 0}
+            };
+            const d = map[e.key];
+            if (d && !(d.x === -direction.x && d.y === -direction.y)) nextDir = d;
+            if (e.key === 'Escape') pauseGame();
+            });
+
+            canvas.addEventListener('touchstart', e => { touchStart = e.touches[0]; });
+            canvas.addEventListener('touchend', e => {
+            if (!running || paused || !touchStart) return;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - touchStart.clientX;
+            const dy = t.clientY - touchStart.clientY;
+            if (Math.hypot(dx, dy) < 30) return;
+            const d = Math.abs(dx) > Math.abs(dy) ? {x: dx > 0 ? 1 : -1, y: 0} : {x: 0, y: dy > 0 ? 1 : -1};
+            if (!(d.x === -direction.x && d.y === -direction.y)) nextDir = d;
+            touchStart = null;
+            });
+
+            function loop(now) {
+            if (!running) return;
+            requestAnimationFrame(loop);
+            if (paused) return;
+            const dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+            if (nextDir) { direction = nextDir; nextDir = null; }
+            headPos.x += direction.x * speed * dt;
+            headPos.y += direction.y * speed * dt;
+
+            if (headPos.x < 0 || headPos.x > w || headPos.y < 0 || headPos.y > h) {
+                running = false;
+                overlay.textContent = 'Game Over';
+                overlay.style.display = 'block';
+                return;
+            }
+
+            trail.unshift({x: headPos.x, y: headPos.y});
+            if (trail.length > maxTrail) trail.pop();
+
+            const dist = Math.hypot(headPos.x - apple.x, headPos.y - apple.y);
+            if (dist < 20) {
+                score++;
+                speed += 5;
+                maxTrail += 5;
+                spawnApple();
+                scoreEl.textContent = 'Puntuación: ' + score;
+                if (score > highscore) {
+                highscore = score;
+                localStorage.setItem('snakeHigh', highscore);
+                highEl.textContent = 'Récord: ' + highscore;
+                }
+            }
+            draw();
+            }
+
+            function draw() {
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#e33';
+            ctx.beginPath();
+            ctx.arc(apple.x, apple.y, 15, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#fff4';
+            ctx.beginPath();
+            ctx.arc(apple.x - 5, apple.y - 5, 7, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#070';
+            ctx.fillRect(apple.x - 3, apple.y - 25, 6, 12);
+
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.lineWidth = 20;
+            const grad = ctx.createLinearGradient(0, 0, w, h);
+            grad.addColorStop(0, '#7f7');
+            grad.addColorStop(1, '#0a0');
+            ctx.strokeStyle = grad;
+            ctx.beginPath();
+            trail.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.stroke();
+
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(headPos.x - 8, headPos.y - 8, 4, 0, 2 * Math.PI);
+            ctx.arc(headPos.x + 8, headPos.y - 8, 4, 0, 2 * Math.PI);
+            ctx.fill();
+            }
+        })();
+        </script>
+    </main>
+</body>
+</html>
+
+
+
